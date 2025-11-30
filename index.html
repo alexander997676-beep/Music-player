@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Music Player (Neon Glass)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Fixed Accent Color (Neon Pink/Magenta) */
+            --theme-accent: #DB2777; 
+            --theme-accent-dark: rgba(219, 39, 119, 0.8);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #09090b;
+            color: #fff;
+            overflow: hidden; 
+        }
+
+        /* --- Animated Background Blobs --- */
+        .blob {
+            position: absolute;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.7;
+            animation: float 10s infinite ease-in-out;
+        }
+        .blob-1 { top: 10%; left: 10%; width: 300px; height: 300px; background: #7c3aed; animation-delay: 0s; }
+        .blob-2 { bottom: 10%; right: 10%; width: 350px; height: 350px; background: var(--theme-accent); animation-delay: 2s; }
+        .blob-3 { bottom: 20%; left: 20%; width: 250px; height: 250px; background: #2563eb; animation-delay: 4s; }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+
+        /* --- Glassmorphism Card --- */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.01);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .bottom-playlist {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+        }
+
+        /* --- Album Art & Glow --- */
+        .album-art-container {
+            box-shadow: 0 0 40px var(--theme-accent-dark);
+            transition: box-shadow 0.5s ease-out, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .playing .album-art-img {
+            animation: spin 12s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* --- Waveform Visualizer --- */
+        .waveform-bar {
+            width: 3px;
+            min-height: 2px;
+            background: var(--theme-accent);
+            border-radius: 9999px;
+            opacity: 0.8;
+            transform-origin: bottom;
+            transition: height 0.1s ease;
+        }
+        .playing .waveform-bar {
+            animation: waveform 0.6s linear infinite alternate;
+        }
+        .paused .waveform-bar { 
+            animation-play-state: paused; 
+            height: 4px !important;
+            opacity: 0.5;
+        }
+        
+        @keyframes waveform {
+            0% { transform: scaleY(0.5); }
+            50% { transform: scaleY(1.5); }
+            100% { transform: scaleY(0.8); }
+        }
+
+        /* --- UI Controls --- */
+        .play-button {
+            background-color: var(--theme-accent);
+            box-shadow: 0 10px 25px -5px var(--theme-accent);
+        }
+
+        /* Range Slider Styling */
+        input[type=range]::-webkit-slider-runnable-track {
+            background: rgba(255,255,255,0.2);
+        }
+        #progress-bar, #volume-slider {
+            background: linear-gradient(to right, var(--theme-accent) 0%, var(--theme-accent) 0%, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.2) 100%);
+        }
+
+        /* Active Song State */
+        .song-item.active {
+            background: rgba(255,255,255,0.1);
+            border-left: 3px solid var(--theme-accent);
+        }
+        .song-item.active .song-title { color: var(--theme-accent); }
+        .btn-active { color: var(--theme-accent) !important; }
+
+        /* Search Input */
+        .search-input-container {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .search-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--theme-accent);
+        }
+        
+        /* Footer Neon Text */
+        .neon-text {
+            color: var(--theme-accent);
+            text-shadow: 0 0 5px var(--theme-accent), 0 0 10px var(--theme-accent-dark);
+        }
+
+        /* Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+    </style>
+</head>
+<body class="h-screen w-full flex items-center justify-center relative">
+
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+
+    <div class="glass-card w-full max-w-md rounded-[2rem] overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-center p-6 pb-2">
+            <button class="text-gray-400 hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            <span class="text-xs font-bold tracking-widest text-gray-400 uppercase">Ultimate Player</span>
+            <button class="text-gray-400 hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+        </div>
+
+        <!-- Main Player Area -->
+        <div class="flex flex-col items-center p-6 pt-2 flex-grow overflow-y-auto">
+            
+            <!-- Album Art -->
+            <div class="relative w-64 h-64 mb-8 mt-4 album-art-container rounded-full p-2 border border-white/10 bg-white/5">
+                <img id="album-art" 
+                     src="https://i.supaimg.com/c195cd6a-f837-4a7d-aceb-82d207dc69a7.jpg" 
+                     alt="Custom Logo" 
+                     class="album-art-img w-full h-full rounded-full object-cover shadow-2xl">
+                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-gray-900 rounded-full border-2 border-gray-600 z-10"></div>
+            </div>
+
+            <!-- Song Info -->
+            <div class="w-full text-center mb-2">
+                <h2 id="current-song-title" class="text-3xl font-bold text-white truncate drop-shadow-lg">Song Title</h2>
+                <p id="current-song-artist" class="text-lg text-gray-400 font-medium mt-1">Artist Name</p>
+            </div>
+
+            <!-- Visualizer -->
+            <div id="waveform-visualizer" class="flex items-end justify-center gap-[2px] h-12 mb-6 paused w-full"></div>
+
+            <!-- Progress Bar -->
+            <div class="w-full mb-6 px-2 group">
+                <input type="range" id="progress-bar" value="0" min="0" max="100" class="w-full h-1 cursor-pointer">
+                <div class="flex justify-between text-xs text-gray-400 font-mono mt-2 group-hover:text-white transition-colors">
+                    <span id="current-time">0:00</span>
+                    <span id="duration">0:00</span>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center justify-between w-full px-2 mb-4">
+                <button id="shuffle-btn" class="text-gray-500 hover:text-white transition h-6 w-6" title="Shuffle">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </button>
+
+                <div class="flex items-center space-x-2">
+                    <button id="skip-back-btn" class="text-white hover:text-gray-400 transition transform hover:scale-105" title="-10s">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z" opacity="0.3"/><path fill-rule="evenodd" d="M10.156 5.168a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4a1 1 0 001.555-.832V12.92L17 14V6l-6.844 5.332V5.168z" clip-rule="evenodd"/></svg>
+                    </button>
+                    <button id="prev-btn" class="text-white hover:text-gray-400 transition transform hover:scale-110" title="Previous">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z" /></svg>
+                    </button>
+                </div>
+
+                <button id="play-btn" class="play-button text-white rounded-full p-5 transform transition hover:scale-105 active:scale-95">
+                    <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 ml-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                    <svg id="pause-icon" xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                </button>
+
+                <div class="flex items-center space-x-2">
+                    <button id="next-btn" class="text-white hover:text-gray-400 transition transform hover:scale-110" title="Next">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4a1 1 0 00-1.555.832v2.798L4.555 5.168z" /></svg>
+                    </button>
+                    <button id="skip-forward-btn" class="text-white hover:text-gray-400 transition transform hover:scale-105" title="+10s">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4a1 1 0 00-1.555.832V7.07l-6.844-4.24z" opacity="0.3"/><path fill-rule="evenodd" d="M10.156 5.168A1 1 0 008.601 6v8a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4z" clip-rule="evenodd"/></svg>
+                    </button>
+                </div>
+
+                <button id="repeat-btn" class="text-gray-500 hover:text-white transition h-6 w-6" title="Repeat">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </button>
+            </div>
+
+            <!-- Volume -->
+            <div class="w-full flex items-center justify-center space-x-3 text-gray-400 px-4 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.383 3.031c.28-.154.597-.307.962-.307.728 0 1.354.437 1.354 1.166v.834h2.25a.75.75 0 01.75.75v6a.75.75 0 01-.75.75h-2.25v.834c0 .729-.626 1.166-1.354 1.166-.365 0-.682-.153-.962-.307L6.46 15.71a.75.75 0 01-.795-.06l-4.5-3.5A.75.75 0 011 11.5v-3a.75.75 0 01.165-.48l4.5-3.5a.75.75 0 01.795-.06l2.923 1.871zm.117-1.78a.75.75 0 00-1.127-.14l-2.75 2.138a.75.75 0 00-.23.189L4 5.378V3.5a.75.75 0 00-1.5 0V7.5H1.25A1.25 1.25 0 000 8.75v3.5A1.25 1.25 0 001.25 13H2.5v4a.75.75 0 001.5 0v-1.878l.27-.199a.75.75 0 00-.23-.189l2.75 2.138a.75.75 0 001.127-.14l3.5-5.5a.75.75 0 000-.86l-3.5-5.5zM15 8.75a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V9.5a.75.75 0 01.75-.75zM16.75 6.75a.75.75 0 01.75.75v5a.75.75 0 01-1.5 0v-5a.75.75 0 01.75-.75z" clip-rule="evenodd" /></svg>
+                <input type="range" id="volume-slider" value="100" min="0" max="100" class="w-24 h-1 cursor-pointer" aria-label="Volume Control">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M11 5.5a1 1 0 11-2 0 1 1 0 012 0zM13 14a1 1 0 100-2 1 1 0 000 2zM15 9a1 1 0 100-2 1 1 0 000 2zM17 12a1 1 0 100-2 1 1 0 000 2zM18 10a1 1 0 11-2 0 1 1 0 012 0zM5.25 6.25a.75.75 0 00-1.5 0V7.5h-1a.75.75 0 000 1.5h1V10a.75.75 0 001.5 0V8.25h1A.75.75 0 006 7.5H5.25V6.25zM12 10a2 2 0 11-4 0 2 2 0 014 0zM10 8a1 1 0 00-1 1v2a1 1 0 002 0V9a1 1 0 00-1-1z" /></svg>
+            </div>
+        </div>
+
+        <!-- Bottom Playlist -->
+        <div class="bottom-playlist p-4 border-t border-white/10 overflow-y-auto max-h-48 custom-scrollbar">
+            
+            <div id="search-container" class="relative mb-3">
+                <input type="text" id="search-input" placeholder="Search song or artist..."
+                       class="search-input w-full p-2 pl-10 rounded-lg text-sm text-white search-input-container transition-all">
+                <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <button id="clear-search-btn" class="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hidden hover:text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            
+            <div id="playlist" class="space-y-1"></div>
+        </div>
+        
+        <div class="w-full text-center py-2 bg-black/30 border-t border-white/10">
+            <p class="text-xs font-mono tracking-widest neon-text">MADE BY MUHAMMAD FAIZAN AHMED</p>
+        </div>
+
+    </div>
+
+    <audio id="audio-player"></audio>
+
+    <script>
+        const LOGO_URL = "https://i.supaimg.com/c195cd6a-f837-4a7d-aceb-82d207dc69a7.jpg";
+        const ACCENT_COLOR = '#DB2777'; 
+        const ACCENT_COLOR_DARK = 'rgba(219, 39, 119, 0.8)';
+        
+        // --- Playlist Data ---
+        const playlistData = [
+            { title: "KHAYAAL", artist: "Talwiinder", url: "https://peculiar-coral-bp1ey5daq7.edgeone.app/-Talwiinder-Khayaal-NDS-Official-Music-V_36.mp3", albumArt: LOGO_URL },
+            { title: "Track 2", artist: "Unknown Artist", url: "https://yearning-orange-mgcrhrebmi.edgeone.app/videoplayback.mp3", albumArt: LOGO_URL },
+            { title: "NASHA", artist: "Talwiinder", url: "https://yearling-black-ibz6skxget.edgeone.app/Talwiinder-NASHA-Visualizer-Prod-by-Visi_1.mp3", albumArt: LOGO_URL },
+            { title: "Balenci", artist: "Shubh", url: "https://naval-aqua-1gkoxehazl.edgeone.app/Shubh-Balenci-Official-Music-Video-_3.mp3", albumArt: LOGO_URL },
+            { title: "Cheques", artist: "Shubh", url: "https://fantastic-jade-h75wnbaphu.edgeone.app/Shubh-Cheques-Official-Music-Video-_6.mp3", albumArt: LOGO_URL },
+            { title: "Together", artist: "Shubh", url: "https://liable-tan-cv78zbg1bc.edgeone.app/Shubh-Together-Official-Music-Video-_4.mp3", albumArt: LOGO_URL },
+            { title: "Elevated", artist: "Shubh", url: "https://commercial-emerald-a1gxiqebzs.edgeone.app/Elevated-Official-Audio-Shubh_7.mp3", albumArt: LOGO_URL },
+            { title: "Pal Pal", artist: "Afusic & Talwiinder", url: "https://fundamental-azure-mpswjszlzp.edgeone.app/Afusic-Pal-Pal-with-Talwiinder-Official-_2.mp3", albumArt: LOGO_URL },
+            { title: "No Love", artist: "Shubh", url: "https://appalling-black-3n8lihzp3y.edgeone.app/No-Love-Official-Audio-Shubh_11.mp3", albumArt: LOGO_URL },
+            { title: "Still Rollin", artist: "Shubh", url: "https://flat-black-pwb5uycrdz.edgeone.app/Shubh-Still-Rollin-Official-Music-Video-_13.mp3", albumArt: LOGO_URL },
+            { title: "We Rollin", artist: "Shubh", url: "https://fine-rose-2ohxhihar1.edgeone.app/We-Rollin-Official-Audio-Shubh_10.mp3", albumArt: LOGO_URL },
+            { title: "Supreme", artist: "Shubh", url: "https://shrill-ivory-czkuzfweq3.edgeone.app/Shubh-Supreme-Official-Music-Video-_8.mp3", albumArt: LOGO_URL },
+            { title: "King Shit", artist: "Shubh", url: "https://faint-crimson-ayie7gorr7.edgeone.app/Shubh-King-Shit-Official-Audio-_12.mp3", albumArt: LOGO_URL },
+            { title: "You and Me", artist: "Shubh", url: "https://vague-magenta-vfnqdqa0ji.edgeone.app/Shubh-You-and-Me-Official-Audio-_14.mp3", albumArt: LOGO_URL },
+            { title: "Gal Sun", artist: "Sabaat Batin ft. Rackstar", url: "https://competent-magenta-rauujv1rff.edgeone.app/Gal-Sun-Sabaat-Batin-ft-Rackstar-Officia_16.mp3", albumArt: LOGO_URL },
+            { title: "WAVY", artist: "KARAN AUJLA", url: "https://neat-blue-ron1ekhcgw.edgeone.app/WAVY-OFFICIAL-VIDEO-KARAN-AUJLA-LATEST-P_21.mp3", albumArt: LOGO_URL },
+            { title: "STFU", artist: "Shubh", url: "https://specified-white-fehh2q3xiw.edgeone.app/STFU_19.mp3", albumArt: LOGO_URL },
+            { title: "ZULFAAN", artist: "SARRB", url: "https://hurt-crimson-idjgxsezdt.edgeone.app/ZULFAAN-Official-Audio-SARRB-Starboy-X_20.mp3", albumArt: LOGO_URL },
+            { title: "TUTOR", artist: "Cheema Y & Gur Sidhu", url: "https://querulous-amaranth-rpbinvinbe.edgeone.app/TUTOR-Official-Video-Cheema-Y-Gur-Sidhu-_22.mp3", albumArt: LOGO_URL },
+            { title: "Lalkaara", artist: "Diljit Dosanjh Feat. Sultan", url: "https://raspy-apricot-uza4llac4j.edgeone.app/Diljit-Dosanjh-Lalkaara-Video-Feat-Sulta_17.mp3", albumArt: LOGO_URL },
+            { title: "Gangster Mafia", artist: "Sidhu X Gurbaz", url: "https://metropolitan-scarlet-u419ipdcjc.edgeone.app/Gangster-Mafia-I-AM-Mafia-sidhu-x-Gurbaz_23.mp3", albumArt: LOGO_URL },
+            { title: "Russian Bandana", artist: "Dhanda Nyoliwala", url: "https://comparable-beige-ztcxwl0owq.edgeone.app/Dhanda-Nyoliwala-Russian-Bandana-Music-V_18.mp3", albumArt: LOGO_URL },
+            { title: "God Bless", artist: "Diljit Dosanjh ft. Aura & Ranb", url: "https://obedient-emerald-wvvr8qlb1l.edgeone.app/God-Bless-I-Diljit-Dosanjh-I-Aura-I-Ranb_26.mp3", albumArt: LOGO_URL },
+            { title: "7-7 Magnitude", artist: "Karan Aujla", url: "https://just-teal-kvefrow0ke.edgeone.app/7-7-Magnitude-Music-Video-Karan-Aujla-I-_29.mp3", albumArt: LOGO_URL },
+            { title: "For A Reason", artist: "Karan Aujla", url: "https://varied-yellow-jf9nyqwsd7.edgeone.app/For-A-Reason-Official-Video-Karan-Aujla-_28.mp3", albumArt: LOGO_URL },
+            { title: "Fire", artist: "Karan Aujla", url: "https://gorgeous-jade-nimnpbsm4x.edgeone.app/Fire-Music-Video-Karan-Aujla-Mxrci-Lates_27.mp3", albumArt: LOGO_URL },
+            { title: "On Top", artist: "Karan Aujla", url: "https://content-orange-ccuidjubgh.edgeone.app/On-Top-Full-Video-Karan-Aujla-Yeah-Proof_24.mp3", albumArt: LOGO_URL },
+            { title: "Bol Kaffara Kya Hoga", artist: "Various Artists", url: "https://many-salmon-nlhjz7s6wv.edgeone.app/Bol-Kaffara-Kya-Hoga-Ek-Deewane-Ki-Deewa_32.mp3", albumArt: LOGO_URL },
+            { title: "Jhol", artist: "Coke Studio S15 / Maanu", url: "https://continuing-yellow-yjukjolyh5.edgeone.app/Jhol-Coke-Studio-Pakistan-Season-15-Maan_31.mp3", albumArt: LOGO_URL },
+            { title: "Tu Hai Kahan", artist: "AUR", url: "https://miniature-jade-56s1edbxfn.edgeone.app/Tu-Hai-Kahan-by-AUR-تو-ہے-کہاں-Official-_33.mp3", albumArt: LOGO_URL },
+            { title: "Sahiba", artist: "Aditya Rikha", url: "https://late-white-kylmg8yxq4.edgeone.app/Sahiba-Official-Music-Video-Aditya-Rikha_34.mp3", albumArt: LOGO_URL },
+            // NEW SONG ADDED
+            { title: "itna na mujse tu piyar badha", artist: "Unknown Artist", url: "https://n.f-a-k.workers.dev/videoplayback.webm", albumArt: LOGO_URL }
+        ];
+
+        // --- Variables ---
+        let currentSongIndex = 0;
+        let isPlaying = false;
+        let isShuffle = false;
+        let isRepeat = false;
+        const audio = document.getElementById('audio-player');
+        const waveformContainer = document.getElementById('waveform-visualizer');
+        const playlistContainer = document.getElementById('playlist');
+        const root = document.documentElement;
+        let currentFilteredPlaylist = playlistData; 
+
+        // --- Elements ---
+        const ui = {
+            playBtn: document.getElementById('play-btn'),
+            playIcon: document.getElementById('play-icon'),
+            pauseIcon: document.getElementById('pause-icon'),
+            prevBtn: document.getElementById('prev-btn'),
+            nextBtn: document.getElementById('next-btn'),
+            shuffleBtn: document.getElementById('shuffle-btn'),
+            repeatBtn: document.getElementById('repeat-btn'),
+            skipBackBtn: document.getElementById('skip-back-btn'), 
+            skipForwardBtn: document.getElementById('skip-forward-btn'), 
+            progressBar: document.getElementById('progress-bar'),
+            volumeSlider: document.getElementById('volume-slider'), 
+            currTime: document.getElementById('current-time'),
+            durTime: document.getElementById('duration'),
+            title: document.getElementById('current-song-title'),
+            artist: document.getElementById('current-song-artist'),
+            art: document.getElementById('album-art'),
+            artContainer: document.querySelector('.album-art-container'),
+            searchInput: document.getElementById('search-input'), 
+            clearSearchBtn: document.getElementById('clear-search-btn') 
+        };
+
+        // --- Initialization ---
+        function init() {
+            setFixedTheme(); 
+            renderWaveform(30); 
+            renderPlaylist(playlistData);
+            audio.volume = ui.volumeSlider.value / 100;
+            setVolume.call(ui.volumeSlider); 
+            loadSong(0, false);
+        }
+
+        function setFixedTheme() {
+            root.style.setProperty('--theme-accent', ACCENT_COLOR);
+            root.style.setProperty('--theme-accent-dark', ACCENT_COLOR_DARK);
+            updateProgressBackground(ui.progressBar.value); 
+            setVolume.call(ui.volumeSlider); 
+            updatePlaylistActiveState(); 
+        }
+
+        // --- Core Logic ---
+        function loadSong(index, autoPlay = true) {
+            const selectedSong = currentFilteredPlaylist[index];
+            if (!selectedSong) return; 
+
+            // Find index in main playlist
+            const originalIndex = playlistData.findIndex(s => s.url === selectedSong.url);
+            if (originalIndex === -1) return; 
+            
+            currentSongIndex = originalIndex;
+            
+            ui.title.innerText = selectedSong.title;
+            ui.artist.innerText = selectedSong.artist;
+            ui.art.src = LOGO_URL; 
+            audio.src = selectedSong.url;
+            
+            setFixedTheme();
+            updatePlaylistActiveState();
+
+            if (autoPlay) playSong();
+            else updatePlayStateUI(false);
+        }
+        
+        function playSong() {
+            audio.play().then(() => updatePlayStateUI(true)).catch(e => console.log("Autoplay blocked/Error"));
+        }
+
+        function pauseSong() {
+            audio.pause();
+            updatePlayStateUI(false);
+        }
+
+        function togglePlay() {
+            if (isPlaying) pauseSong();
+            else playSong();
+        }
+
+        function updatePlayStateUI(playing) {
+            isPlaying = playing;
+            if (playing) {
+                ui.playIcon.classList.add('hidden');
+                ui.pauseIcon.classList.remove('hidden');
+                ui.artContainer.classList.add('playing');
+                waveformContainer.classList.remove('paused');
+                waveformContainer.classList.add('playing');
+            } else {
+                ui.playIcon.classList.remove('hidden');
+                ui.pauseIcon.classList.add('hidden');
+                ui.artContainer.classList.remove('playing');
+                waveformContainer.classList.add('paused');
+                waveformContainer.classList.remove('playing');
+            }
+        }
+        
+        // --- Waveform ---
+        function renderWaveform(numBars) {
+            waveformContainer.innerHTML = '';
+            for (let i = 0; i < numBars; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'waveform-bar';
+                const initialHeight = Math.floor(Math.random() * 20) + 10; 
+                bar.style.height = `${initialHeight}%`;
+                const delay = (Math.random() * 0.6).toFixed(2); 
+                bar.style.animationDelay = `-${delay}s`;
+                waveformContainer.appendChild(bar);
+            }
+        }
+
+        // --- Seeking ---
+        function skipForward() {
+            audio.currentTime = Math.min(audio.currentTime + 10, audio.duration);
+        }
+
+        function skipBackward() {
+            audio.currentTime = Math.max(audio.currentTime - 10, 0);
+        }
+
+        // --- Navigation ---
+        function nextSong() {
+            const songIndexInFilteredList = currentFilteredPlaylist.findIndex(
+                s => s.url === playlistData[currentSongIndex].url
+            );
+
+            let nextIndex;
+            if (isShuffle) {
+                nextIndex = Math.floor(Math.random() * currentFilteredPlaylist.length);
+                if (currentFilteredPlaylist.length > 1 && nextIndex === songIndexInFilteredList) {
+                    nextIndex = (nextIndex + 1) % currentFilteredPlaylist.length;
+                }
+            } else {
+                nextIndex = (songIndexInFilteredList + 1) % currentFilteredPlaylist.length;
+            }
+
+            if (currentFilteredPlaylist.length === 0) return;
+            loadSong(nextIndex, true);
+        }
+
+        function prevSong() {
+            if(audio.currentTime > 3) {
+                audio.currentTime = 0;
+                return;
+            }
+            const songIndexInFilteredList = currentFilteredPlaylist.findIndex(
+                s => s.url === playlistData[currentSongIndex].url
+            );
+            let prevIndex = songIndexInFilteredList - 1;
+            if (prevIndex < 0) prevIndex = currentFilteredPlaylist.length - 1;
+            if (currentFilteredPlaylist.length === 0) return;
+            loadSong(prevIndex, true);
+        }
+
+        // --- Progress & Volume ---
+        function updateProgressBackground(value) {
+            const val = (value - ui.progressBar.min) / (ui.progressBar.max - ui.progressBar.min) * 100;
+            const accent = root.style.getPropertyValue('--theme-accent');
+            ui.progressBar.style.background = `linear-gradient(to right, ${accent} 0%, ${accent} ${val}%, rgba(255,255,255,0.2) ${val}%, rgba(255,255,255,0.2) 100%)`;
+        }
+
+        function updateProgress(e) {
+            const { duration, currentTime } = e.srcElement;
+            if (isNaN(duration)) return;
+            const progressPercent = (currentTime / duration) * 100;
+            ui.progressBar.value = progressPercent;
+            updateProgressBackground(progressPercent);
+            ui.currTime.innerText = formatTime(currentTime);
+            ui.durTime.innerText = formatTime(duration);
+        }
+
+        function setProgress() {
+            const width = this.value;
+            audio.currentTime = (width / 100) * audio.duration;
+            updateProgressBackground(width);
+        }
+
+        function formatTime(time) {
+            const min = Math.floor(time / 60);
+            const sec = Math.floor(time % 60);
+            return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+        }
+        
+        function setVolume() {
+            audio.volume = this.value / 100;
+            const val = (this.value - this.min) / (this.max - this.min) * 100;
+            const accent = root.style.getPropertyValue('--theme-accent');
+            this.style.background = `linear-gradient(to right, ${accent} 0%, ${accent} ${val}%, rgba(255,255,255,0.2) ${val}%, rgba(255,255,255,0.2) 100%)`;
+        }
+
+        // --- Playlist & Search ---
+        function filterPlaylist() {
+            const searchTerm = ui.searchInput.value.toLowerCase().trim();
+            ui.clearSearchBtn.classList.toggle('hidden', searchTerm.length === 0);
+
+            if (searchTerm === "") {
+                currentFilteredPlaylist = playlistData;
+            } else {
+                currentFilteredPlaylist = playlistData.filter(song =>
+                    song.title.toLowerCase().includes(searchTerm) ||
+                    song.artist.toLowerCase().includes(searchTerm)
+                );
+            }
+            renderPlaylist(currentFilteredPlaylist);
+            if (currentFilteredPlaylist.length === 0) {
+                ui.title.innerText = 'No Results';
+                ui.artist.innerText = 'Try a different search';
+            }
+        }
+
+        function renderPlaylist(songsToRender) {
+            playlistContainer.innerHTML = '';
+            if (songsToRender.length === 0) {
+                playlistContainer.innerHTML = '<p class="text-center text-gray-500 py-4">No songs match your search.</p>';
+                return;
+            }
+            songsToRender.forEach((song, index) => {
+                const item = document.createElement('div');
+                item.onclick = () => loadSong(index, true); 
+                item.className = `song-item flex items-center justify-between p-2 rounded-lg cursor-pointer hover:bg-white/5 transition`;
+                item.innerHTML = `
+                    <div class="flex items-center overflow-hidden w-full">
+                        <img src="${LOGO_URL}" class="w-10 h-10 rounded-md object-cover mr-3 opacity-80">
+                        <div class="truncate flex-1">
+                            <p class="song-title text-sm font-semibold text-gray-200 truncate">${song.title}</p>
+                            <p class="text-xs text-gray-500 truncate">${song.artist}</p>
+                        </div>
+                    </div>
+                `;
+                playlistContainer.appendChild(item);
+            });
+            updatePlaylistActiveState();
+        }
+
+        function updatePlaylistActiveState() {
+            const currentlyPlayingSong = playlistData[currentSongIndex];
+            const activeIndexInFiltered = currentFilteredPlaylist.findIndex(s => s.url === currentlyPlayingSong.url);
+            const items = document.querySelectorAll('.song-item');
+            items.forEach((item, index) => {
+                if (index === activeIndexInFiltered) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+            if(items[activeIndexInFiltered]) items[activeIndexInFiltered].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // --- Events ---
+        ui.playBtn.addEventListener('click', togglePlay);
+        ui.nextBtn.addEventListener('click', nextSong);
+        ui.prevBtn.addEventListener('click', prevSong);
+        ui.skipForwardBtn.addEventListener('click', skipForward); 
+        ui.skipBackBtn.addEventListener('click', skipBackward); 
+        ui.shuffleBtn.addEventListener('click', () => { isShuffle = !isShuffle; ui.shuffleBtn.classList.toggle('btn-active', isShuffle); });
+        ui.repeatBtn.addEventListener('click', () => { isRepeat = !isRepeat; ui.repeatBtn.classList.toggle('btn-active', isRepeat); audio.loop = isRepeat; });
+        ui.progressBar.addEventListener('input', setProgress);
+        ui.volumeSlider.addEventListener('input', setVolume); 
+        ui.searchInput.addEventListener('input', filterPlaylist);
+        ui.clearSearchBtn.addEventListener('click', () => { ui.searchInput.value = ''; filterPlaylist(); ui.searchInput.focus(); });
+
+        audio.addEventListener('loadedmetadata', () => {
+            ui.durTime.innerText = formatTime(audio.duration);
+            ui.progressBar.max = 100;
+            ui.progressBar.value = 0;
+            updateProgressBackground(0);
+        });
+        audio.addEventListener('timeupdate', updateProgress);
+        audio.addEventListener('ended', () => { if (!isRepeat) nextSong(); });
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement === ui.searchInput) return;
+            if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+            else if (e.code === 'ArrowRight') { e.ctrlKey || e.shiftKey ? skipForward() : nextSong(); }
+            else if (e.code === 'ArrowLeft') { e.ctrlKey || e.shiftKey ? skipBackward() : prevSong(); }
+        });
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
